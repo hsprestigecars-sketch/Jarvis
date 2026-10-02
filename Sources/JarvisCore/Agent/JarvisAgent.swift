@@ -40,16 +40,16 @@ public final class JarvisAgent {
 
     public init(
         registry: ToolRegistry,
-        confirmations: ConfirmationEngine = ConfirmationEngine(),
-        emergencyStop: EmergencyStop = EmergencyStop(),
+        confirmations: ConfirmationEngine? = nil,
+        emergencyStop: EmergencyStop? = nil,
         transport: ClaudeTransport = AnthropicHTTPTransport(),
         store: ConversationStore = InMemoryConversationStore(),
         configuration: @escaping () -> ClaudeConfiguration
     ) {
         self.registry = registry
         self.safety = SafetyEngine(registry: registry)
-        self.confirmations = confirmations
-        self.emergencyStop = emergencyStop
+        self.confirmations = confirmations ?? ConfirmationEngine()
+        self.emergencyStop = emergencyStop ?? EmergencyStop()
         self.transport = transport
         self.store = store
         self.configuration = configuration
@@ -60,13 +60,13 @@ public final class JarvisAgent {
         recentRequests = snapshot.recentRequests
         repairHistory()
 
-        emergencyStop.register("Cancel pending confirmations") { [weak self] in
+        self.emergencyStop.register("Cancel pending confirmations") { [weak self] in
             self?.confirmations.cancelAll()
         }
-        emergencyStop.register("Cancel JARVIS task") { [weak self] in
+        self.emergencyStop.register("Cancel JARVIS task") { [weak self] in
             self?.cancelCurrentTask()
         }
-        emergencyStop.register("Stop speech") { [weak self] in
+        self.emergencyStop.register("Stop speech") { [weak self] in
             self?.onStopSpeech?()
         }
     }
