@@ -7,3 +7,5 @@ DerivedData/
 *.xcworkspace
 !Package.swift
 .swiftpm/
+/build-playground
+/dist/*.tmp

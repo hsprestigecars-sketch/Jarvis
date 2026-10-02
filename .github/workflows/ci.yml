@@ -31,3 +31,25 @@ jobs:
             -scheme JARVIS \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO
+
+  playground-app:
+    name: Build Swift Playgrounds package
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JARVIS.swiftpm is up to date
+        run: |
+          python3 scripts/make_playground.py
+          git diff --exit-code -- JARVIS.swiftpm || (echo "Run scripts/make_playground.py and commit the result" && exit 1)
+      - name: Build for iPad simulator
+        working-directory: JARVIS.swiftpm
+        run: |
+          xcodebuild build \
+            -scheme JARVIS \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../build-playground \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Show privacy keys in built Info.plist
+        run: |
+          plist=$(find build-playground -path '*Debug-iphonesimulator/JARVIS.app/Info.plist' | head -1)
+          plutil -p "$plist" | grep -i -E 'UsageDescription|CFBundleIdentifier'
