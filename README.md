@@ -63,7 +63,7 @@ On first launch, JARVIS opens Settings so you can paste your Claude API key. The
 
 ## Not done yet (on purpose)
 
-- **Wake word.** "Hey JARVIS" with the screen off would need the microphone running all the time. iPadOS doesn't allow that for third-party apps, and it would cost privacy and battery. Siri plus App Shortcuts is the supported hands-free route. A local wake word that only listens while the app is open could be added later. It would never upload audio.
+- **Wake word with the screen off.** Hands-free mode answers to "Jarvis" while the app is open on screen. It uses on-device speech recognition only and never uploads audio to hear the name. iPadOS doesn't let apps keep the microphone on when the iPad is locked or the app is in the background, so it pauses then.
 - **Publishing to Instagram and TikTok.** This needs a registered Meta/TikTok developer app, which TikTok must audit before it allows public posting. Instagram also needs a Business or Creator account and a public URL to host the media. A `SocialConnector` implementation plugs into `SocialAndMediaTools.connectors`.
 - **Mac companion.** `RemoteToolBridge` already defines how a paired Mac's tools register: they can never be riskier than Level 2, and they always pass through the iPad's safety engine. The Mac app and its transport come later.
 - **Apple Notes integration.** iPadOS has no public API for Apple Notes, so JARVIS keeps its own notes and shares them out.

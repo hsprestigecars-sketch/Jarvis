@@ -29,8 +29,13 @@ final class VoiceOutput {
         }
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.05
         utterance.pitchMultiplier = 0.95
-        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // Don't reconfigure the session if the microphone is already running
+        // (hands-free); changing it would interrupt listening.
+        let session = AVAudioSession.sharedInstance()
+        if session.category != .playAndRecord {
+            try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+        }
+        try? session.setActive(true)
         synthesizer.speak(utterance)
     }
 

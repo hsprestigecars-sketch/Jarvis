@@ -11,6 +11,7 @@ final class AppModel {
     let presenter: Presenter
     let voiceInput = VoiceInput()
     let voiceOutput = VoiceOutput()
+    let handsFree = HandsFreeListener()
     let agent: JarvisAgent
     /// Last turn came from voice, so the reply is spoken.
     @ObservationIgnored private var replyBySpeech = false
@@ -47,7 +48,11 @@ final class AppModel {
         }
         applySafetyPreferences()
 
-        agent.emergencyStop.register("Stop microphone") { [weak self] in self?.voiceInput.stop(submit: false) }
+        agent.emergencyStop.register("Stop microphone") { [weak self] in
+            self?.voiceInput.stop(submit: false)
+            // Hands-free keeps listening for the name, but drops any half-heard request.
+            self?.handsFree.reset()
+        }
         agent.emergencyStop.register("Dismiss system sheets") { [weak self] in self?.presenter.finish(.dismissed) }
         agent.onStopSpeech = { [weak self] in self?.voiceOutput.stop() }
         agent.onReply = { [weak self] reply in
@@ -63,9 +68,28 @@ final class AppModel {
         voiceOutput.onSpeakingChanged = { [weak self] speaking in
             guard let self else { return }
             self.agent.setSpeaking(speaking)
-            if !speaking, self.replyBySpeech, self.settings.continuousConversation, !self.agent.isBusy {
-                Task { await self.startListening() }
+            guard !speaking else { return }
+            // Don't treat JARVIS's own reply as something the user said.
+            self.handsFree.clearBuffer()
+            if self.replyBySpeech, self.settings.continuousConversation, !self.agent.isBusy {
+                if self.handsFree.isOn {
+                    self.handsFree.wakeManually()
+                } else {
+                    Task { await self.startListening() }
+                }
             }
+        }
+        handsFree.onWake = { [weak self] in
+            guard let self else { return }
+            self.voiceOutput.stop() // talking over JARVIS interrupts it
+            self.agent.setListening(true)
+        }
+        handsFree.onGiveUp = { [weak self] in self?.agent.setListening(false) }
+        handsFree.onCommand = { [weak self] text in
+            guard let self else { return }
+            self.agent.setListening(false)
+            self.replyBySpeech = true
+            self.agent.submit(text)
         }
         voiceInput.onFinal = { [weak self] text in
             guard let self else { return }
@@ -93,11 +117,29 @@ final class AppModel {
     }
 
     func toggleListening() {
+        if handsFree.isOn {
+            voiceOutput.stop()
+            handsFree.wakeManually()
+            return
+        }
         if voiceInput.isListening {
             voiceInput.stop(submit: true)
             agent.setListening(false)
         } else {
             Task { await startListening() }
+        }
+    }
+
+    /// Starts or stops hands-free listening to match the setting. Called when
+    /// the app comes on screen, leaves it, or the setting changes.
+    func updateHandsFree(appActive: Bool) {
+        if appActive, settings.handsFree, !needsAPIKey {
+            if !handsFree.isOn {
+                voiceInput.stop(submit: false)
+                Task { await handsFree.start() }
+            }
+        } else {
+            handsFree.stop()
         }
     }
 

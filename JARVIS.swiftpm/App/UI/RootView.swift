@@ -30,7 +30,7 @@ struct RootView: View {
             }
             .padding(16)
         }
-        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showSettings, onDismiss: { model.updateHandsFree(appActive: scenePhase == .active) }) { SettingsView() }
         .sheet(item: $presenter.sheet, onDismiss: { model.presenter.finish(.dismissed) }) { sheet in
             SystemSheetView(sheet: sheet, presenter: model.presenter)
                 .ignoresSafeArea()
@@ -38,12 +38,14 @@ struct RootView: View {
         .onAppear {
             if model.needsAPIKey { showSettings = true }
             handleIntents()
+            model.updateHandsFree(appActive: scenePhase == .active)
         }
         .onChange(of: inbox.pending) { _, _ in handleIntents() }
         .onChange(of: inbox.startListening) { _, _ in handleIntents() }
         .onChange(of: scenePhase) { _, phase in
             // Never keep the microphone open in the background.
             if phase != .active, model.voiceInput.isListening { model.voiceInput.stop(submit: false) }
+            model.updateHandsFree(appActive: phase == .active)
         }
     }
 
@@ -113,9 +115,10 @@ struct HomePanel: View {
                     .foregroundStyle(Theme.textPrimary)
                     .multilineTextAlignment(.center)
 
+                HandsFreeBanner()
+
                 Button { model.toggleListening() } label: {
-                    Label(model.voiceInput.isListening ? "Listening… tap to send" : "Talk to JARVIS",
-                          systemImage: model.voiceInput.isListening ? "waveform" : "mic.fill")
+                    Label(talkButtonTitle, systemImage: model.voiceInput.isListening ? "waveform" : "mic.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -190,6 +193,11 @@ struct HomePanel: View {
         .jarvisPanel()
     }
 
+    private var talkButtonTitle: String {
+        if model.voiceInput.isListening { return "Listening… tap to send" }
+        return model.handsFree.isOn ? "Tap instead of saying “Jarvis”" : "Talk to JARVIS"
+    }
+
     private var prompt: String {
         switch model.agent.status {
         case .listening: "I'm listening."
@@ -199,7 +207,48 @@ struct HomePanel: View {
         case .speaking: "Speaking…"
         case .protected: "That one is protected."
         case .error: "Something went wrong."
-        case .ready: "How can I help?"
+        case .ready: model.handsFree.isOn ? "Say “Jarvis” — how can I help?" : "How can I help?"
         }
+    }
+}
+
+/// Shows whether JARVIS is listening for its name, with an on/off switch.
+struct HandsFreeBanner: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        @Bindable var settings = model.settings
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle(isOn: $settings.handsFree) {
+                Label("Hands-free: say “Jarvis”", systemImage: model.handsFree.isOn ? "ear.fill" : "ear")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .tint(Theme.cyan)
+            .onChange(of: model.settings.handsFree) { _, _ in
+                model.settings.persist()
+                model.updateHandsFree(appActive: scenePhase == .active)
+            }
+
+            switch model.handsFree.phase {
+            case .hearingCommand:
+                Text(model.handsFree.heard.isEmpty ? "Yes? I'm listening…" : "“\(model.handsFree.heard)”")
+                    .font(.callout)
+                    .foregroundStyle(Theme.color(for: .listening))
+            case .waiting:
+                Text("Listening for “Jarvis” on this iPad. Nothing is sent until you say the name.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+            case .off:
+                if let error = model.handsFree.errorMessage {
+                    Text(error).font(.caption).foregroundStyle(Theme.danger)
+                } else if model.settings.handsFree, model.needsAPIKey {
+                    Text("Add your Claude API key in Settings to start hands-free.")
+                        .font(.caption).foregroundStyle(Theme.textSecondary)
+                }
+            }
+        }
+        .padding(12)
+        .jarvisPanel()
     }
 }

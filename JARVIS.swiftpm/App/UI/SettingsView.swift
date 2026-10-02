@@ -45,7 +45,8 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Speak replies to voice requests", isOn: $settings.speakReplies)
-                    Toggle("Keep listening after replies", isOn: $settings.continuousConversation)
+                    Toggle("Hands-free: answer to “Jarvis”", isOn: $settings.handsFree)
+                    Toggle("Keep listening after replies (no need to say the name again)", isOn: $settings.continuousConversation)
                     Picker("Voice", selection: $settings.voiceIdentifier) {
                         Text("Default (English UK)").tag("")
                         ForEach(VoiceOutput.availableVoices, id: \.identifier) { voice in
@@ -55,7 +56,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Voice")
                 } footer: {
-                    Text("Speech is recognised on the iPad when supported. The microphone is only on while you talk to JARVIS. Say “Hey Siri, ask JARVIS” or “Talk to JARVIS” to start hands-free.")
+                    Text("Hands-free listens for “Jarvis” only while JARVIS is open on screen, using speech recognition on this iPad. Audio is never sent anywhere to hear the name, and the screen stays awake so it can keep listening. If on-device recognition isn't supported, use the Talk button.")
                 }
 
                 Section {
