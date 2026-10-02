@@ -10,7 +10,17 @@ USER ─▶ UI + VOICE ─▶ COMMAND PROCESSOR ─▶ CLAUDE ─▶ SAFETY ENGI
            speech)         confirm / protected)  tool calls)  block, arg scan)     action)          Files, Messages UI…)
 ```
 
-## Getting started
+## Install on iPad without a Mac (Swift Playgrounds)
+
+1. On the iPad, install **Swift Playgrounds** from the App Store (free).
+2. In Safari, open `https://github.com/hsprestigecars-sketch/Jarvis/raw/main/dist/JARVIS-Playground.zip` and download it.
+3. In the **Files** app, open Downloads and tap the zip to unpack it. You get a `JARVIS.swiftpm` package.
+4. Tap `JARVIS.swiftpm`. It opens in Swift Playgrounds. Tap **▶ Run**.
+5. In JARVIS Settings, paste your Claude API key and allow the permissions when they're requested.
+
+`JARVIS.swiftpm` is generated from `Sources/` and `App/` by `scripts/make_playground.py`. Don't edit it by hand.
+
+## Getting started (Mac + Xcode)
 
 Requirements: a Mac with Xcode 16 or later, an iPad on iPadOS 17 or later, and a Claude API key.
 
