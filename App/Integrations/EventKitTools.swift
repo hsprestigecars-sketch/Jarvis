@@ -10,11 +10,32 @@ final class EventKitService {
     static let shared = EventKitService()
     let store = EKEventStore()
 
+    /// iPadOS 17 terminates an app that asks for full access without the
+    /// matching Info.plist key. Swift Playgrounds packages can only declare the
+    /// older keys, so in that build JARVIS uses the older request API instead.
+    private static func hasInfoKey(_ key: String) -> Bool {
+        Bundle.main.object(forInfoDictionaryKey: key) != nil
+    }
+
+    private func requestLegacyAccess(to type: EKEntityType) async throws -> Bool {
+        try await withCheckedThrowingContinuation { continuation in
+            store.requestAccess(to: type) { granted, error in
+                if let error { continuation.resume(throwing: error) } else { continuation.resume(returning: granted) }
+            }
+        }
+    }
+
     func ensureEventAccess() async throws {
         switch EKEventStore.authorizationStatus(for: .event) {
         case .fullAccess: return
         case .notDetermined:
-            guard try await store.requestFullAccessToEvents() else {
+            let granted: Bool
+            if Self.hasInfoKey("NSCalendarsFullAccessUsageDescription") {
+                granted = try await store.requestFullAccessToEvents()
+            } else {
+                granted = try await requestLegacyAccess(to: .event)
+            }
+            guard granted, EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
                 throw ToolError.permissionDenied("Calendar access was not granted. You can allow it in Settings › Privacy › Calendars.")
             }
         default:
@@ -26,7 +47,13 @@ final class EventKitService {
         switch EKEventStore.authorizationStatus(for: .reminder) {
         case .fullAccess: return
         case .notDetermined:
-            guard try await store.requestFullAccessToReminders() else {
+            let granted: Bool
+            if Self.hasInfoKey("NSRemindersFullAccessUsageDescription") {
+                granted = try await store.requestFullAccessToReminders()
+            } else {
+                granted = try await requestLegacyAccess(to: .reminder)
+            }
+            guard granted, EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
                 throw ToolError.permissionDenied("Reminders access was not granted. You can allow it in Settings › Privacy › Reminders.")
             }
         default:
