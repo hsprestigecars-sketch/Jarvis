@@ -16,6 +16,7 @@ final class AppModel {
     /// Last turn came from voice, so the reply is spoken.
     @ObservationIgnored private var replyBySpeech = false
     private(set) var registrationProblems: [String] = []
+    @ObservationIgnored private var localBrain: LocalReasoningBackend?
 
     init() {
         JarvisFiles.bootstrap()
@@ -47,6 +48,11 @@ final class AppModel {
             do { try register() } catch { registrationProblems.append("\(name): \(error.localizedDescription)") }
         }
         applySafetyPreferences()
+
+        let localBrain = OnDeviceBrain.make()
+        self.localBrain = localBrain
+        agent.localBackend = localBrain
+        agent.brainSelector = { [weak self] in self?.activeBrain ?? .claude }
 
         agent.emergencyStop.register("Stop microphone") { [weak self] in
             self?.voiceInput.stop(submit: false)
@@ -133,7 +139,7 @@ final class AppModel {
     /// Starts or stops hands-free listening to match the setting. Called when
     /// the app comes on screen, leaves it, or the setting changes.
     func updateHandsFree(appActive: Bool) {
-        if appActive, settings.handsFree, !needsAPIKey {
+        if appActive, settings.handsFree, canThink {
             if !handsFree.isOn {
                 voiceInput.stop(submit: false)
                 Task { await handsFree.start() }
@@ -148,4 +154,25 @@ final class AppModel {
     }
 
     var needsAPIKey: Bool { settings.apiKey.isEmpty }
+
+    /// Why free on-device mode can't be used right now, or nil if it can.
+    var onDeviceUnavailableReason: String? { OnDeviceBrain.unavailableReason(localBrain) }
+
+    /// The brain the next request will use.
+    var activeBrain: Brain {
+        switch settings.brainChoice {
+        case "claude": return .claude
+        case "onDevice": return .onDevice
+        default: return needsAPIKey ? .onDevice : .claude
+        }
+    }
+
+    /// JARVIS can think: Claude has a key, or the free on-device model works.
+    var canThink: Bool {
+        activeBrain == .claude ? !needsAPIKey : onDeviceUnavailableReason == nil
+    }
+
+    var brainLabel: String {
+        activeBrain == .claude ? "Claude" : "On-device (free)"
+    }
 }

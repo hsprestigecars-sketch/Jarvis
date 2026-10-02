@@ -10,6 +10,13 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XC=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphone
       - name: Swift version
         run: swift --version
       - name: Test
@@ -20,6 +27,13 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XC=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphone
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
@@ -37,6 +51,13 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XC=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphone
       - name: Check JARVIS.swiftpm is up to date
         run: |
           python3 scripts/make_playground.py
@@ -49,6 +70,13 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ../build-playground \
             CODE_SIGNING_ALLOWED=NO
+      - name: Confirm Apple on-device AI was compiled in
+        run: |
+          if xcodebuild -showsdks | grep -q "iphonesimulator26"; then
+            grep -rl "AppleIntelligenceBackend" build-playground/Build/Intermediates.noindex >/dev/null && echo "FoundationModels code compiled" || (echo "AppleIntelligenceBackend was not compiled" && exit 1)
+          else
+            echo "No iOS 26 SDK on this runner; on-device AI not compiled"
+          fi
       - name: Show privacy keys in built Info.plist
         run: |
           plist=$(find build-playground -path '*Debug-iphonesimulator/JARVIS.app/Info.plist' | head -1)

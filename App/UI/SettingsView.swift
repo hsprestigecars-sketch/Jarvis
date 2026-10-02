@@ -29,12 +29,34 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Claude API key")
+                    Text("Claude API key (optional)")
                 } footer: {
-                    Text("Create a key at console.anthropic.com. It is kept in the iPad Keychain and only sent to api.anthropic.com.")
+                    Text("Only needed for the Claude brain. Create a key at console.anthropic.com. It is kept in the iPad Keychain and only sent to api.anthropic.com.")
                 }
 
-                Section("Reasoning") {
+                Section {
+                    Picker("Brain", selection: $settings.brainChoice) {
+                        Text("Automatic").tag("auto")
+                        Text("Claude (API key)").tag("claude")
+                        Text("On-device (free)").tag("onDevice")
+                    }
+                    LabeledContent("Using now", value: model.brainLabel)
+                    if let reason = model.onDeviceUnavailableReason {
+                        Label(reason, systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Label("Apple's on-device model is ready — free and offline.", systemImage: "checkmark.seal.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.green)
+                    }
+                } header: {
+                    Text("Brain")
+                } footer: {
+                    Text("Automatic uses Claude when you've added an API key, otherwise Apple's free on-device model. On-device mode handles calendar, reminders, notes, timers and quick questions, but can't research the web, see images or write long documents. Both go through the same JARVIS safety and confirmation rules.")
+                }
+
+                Section("Claude settings") {
                     Picker("Model", selection: $settings.model) {
                         ForEach(JarvisSettings.models, id: \.self) { Text($0) }
                     }

@@ -23,6 +23,12 @@ public final class JarvisAgent {
     @ObservationIgnored public var onStopSpeech: (() -> Void)?
     /// Extra per-turn context (e.g. battery), appended to the context line.
     @ObservationIgnored public var contextProvider: (() -> String?)?
+    /// On-device model used when the brain is `.onDevice`.
+    @ObservationIgnored public var localBackend: LocalReasoningBackend?
+    /// Chooses the brain for each turn. Defaults to Claude.
+    @ObservationIgnored public var brainSelector: (() -> Brain)?
+    /// The brain that handled the most recent turn, for the UI.
+    public private(set) var lastBrain: Brain = .claude
 
     public let registry: ToolRegistry
     public let safety: SafetyEngine
@@ -65,6 +71,9 @@ public final class JarvisAgent {
         }
         self.emergencyStop.register("Cancel JARVIS task") { [weak self] in
             self?.cancelCurrentTask()
+        }
+        self.emergencyStop.register("Stop on-device model") { [weak self] in
+            self?.localBackend?.cancel()
         }
         self.emergencyStop.register("Stop speech") { [weak self] in
             self?.onStopSpeech?()
@@ -154,10 +163,82 @@ public final class JarvisAgent {
         content.append(["type": "text", "text": .string(SystemPrompt.contextLine(extra: contextProvider?()))])
         history.append(["role": "user", "content": .array(content)])
 
+        let brain = brainSelector?() ?? .claude
+        lastBrain = brain
+        let hadImages = !images.isEmpty
         currentTask = Task { [weak self] in
-            await self?.runLoop(turn: turn)
+            switch brain {
+            case .claude: await self?.runLoop(turn: turn)
+            case .onDevice: await self?.runLocal(turn: turn, text: userText, hadImages: hadImages)
+            }
             if self?.activeTurn == turn { self?.currentTask = nil }
         }
+    }
+
+    // MARK: On-device brain
+
+    private func runLocal(turn: UUID, text: String, hadImages: Bool) async {
+        status = .thinking
+        do {
+            guard let backend = localBackend else {
+                throw ToolError.unavailable("On-device AI isn't included in this build of JARVIS.")
+            }
+            if let reason = backend.unavailableReason { throw ToolError.unavailable(reason) }
+            let tools = registry.specs.filter { backend.allowedToolNames.contains($0.name) }
+            var request = text
+            if hadImages {
+                request += "\n(The user attached images, but the on-device model can't see images. Say that image questions need Claude.)"
+            }
+            let reply = try await backend.respond(
+                to: request,
+                context: SystemPrompt.contextLine(extra: contextProvider?()),
+                recentConversation: recentConversationText(),
+                tools: tools,
+                runTool: { [weak self] name, input in
+                    guard let self else { return "Cancelled." }
+                    return await self.runToolForLocalModel(name: name, input: input, turn: turn)
+                }
+            )
+            try ensureActive(turn)
+            // Keep Claude's history coherent if the user switches brains later.
+            history.append(["role": "assistant", "content": [["type": "text", "text": .string(reply.isEmpty ? "(no reply)" : reply)]]])
+            finish(reply: reply, citations: [])
+        } catch is CancellationError {
+            guard turn == activeTurn else { return }
+            history.append(["role": "assistant", "content": [["type": "text", "text": "(stopped)"]]])
+            persist()
+        } catch {
+            guard turn == activeTurn else { return }
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            history.append(["role": "assistant", "content": [["type": "text", "text": .string("(error: \(message))")]]])
+            append(.notice(text: message, style: .error))
+            status = .error(message)
+            persist()
+        }
+    }
+
+    private func runToolForLocalModel(name: String, input: JSONValue, turn: UUID) async -> String {
+        guard turn == activeTurn, !Task.isCancelled else { return "Cancelled by the user." }
+        let toolUse: JSONValue = ["type": "tool_use", "id": .string(UUID().uuidString), "name": .string(name), "input": input]
+        let result = await runTool(toolUse)
+        status = .thinking
+        let text = result["content"]?.stringValue ?? ""
+        return result["is_error"]?.boolValue == true ? "ERROR: " + text : text
+    }
+
+    /// The last few exchanges as plain text, for models without our history format.
+    private func recentConversationText(limit: Int = 1500) -> String {
+        var lines: [String] = []
+        for item in transcript.dropLast().suffix(8) {
+            switch item.kind {
+            case .user(let text, _) where !text.isEmpty: lines.append("User: \(text)")
+            case .assistant(let text, _): lines.append("JARVIS: \(text)")
+            default: break
+            }
+        }
+        var joined = lines.joined(separator: "\n")
+        if joined.count > limit { joined = String(joined.suffix(limit)) }
+        return joined
     }
 
     /// Throws `CancellationError` if this turn was cancelled or replaced.

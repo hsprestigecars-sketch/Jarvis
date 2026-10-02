@@ -36,7 +36,7 @@ struct RootView: View {
                 .ignoresSafeArea()
         }
         .onAppear {
-            if model.needsAPIKey { showSettings = true }
+            if !model.canThink { showSettings = true }
             handleIntents()
             model.updateHandsFree(appActive: scenePhase == .active)
         }
@@ -110,6 +110,9 @@ struct HomePanel: View {
             VStack(spacing: 20) {
                 ReactorView(status: model.agent.status, size: 220)
                     .padding(.top, 8)
+                Label("Brain: \(model.brainLabel)", systemImage: model.activeBrain == .claude ? "cloud" : "cpu")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Theme.textSecondary)
                 Text(prompt)
                     .font(.title3.weight(.medium))
                     .foregroundStyle(Theme.textPrimary)
@@ -242,8 +245,8 @@ struct HandsFreeBanner: View {
             case .off:
                 if let error = model.handsFree.errorMessage {
                     Text(error).font(.caption).foregroundStyle(Theme.danger)
-                } else if model.settings.handsFree, model.needsAPIKey {
-                    Text("Add your Claude API key in Settings to start hands-free.")
+                } else if model.settings.handsFree, !model.canThink {
+                    Text("JARVIS needs a brain first: turn on Apple Intelligence for free mode, or add a Claude API key in Settings.")
                         .font(.caption).foregroundStyle(Theme.textSecondary)
                 }
             }

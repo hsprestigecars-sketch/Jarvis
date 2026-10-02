@@ -18,6 +18,8 @@ final class JarvisSettings {
     var continuousConversation: Bool
     /// Listen for "Jarvis" while the app is open (on-device recognition only).
     var handsFree: Bool
+    /// "auto" (Claude when a key is set, otherwise free on-device), "claude" or "onDevice".
+    var brainChoice: String
 
     init() {
         let defaults = UserDefaults.standard
@@ -30,6 +32,7 @@ final class JarvisSettings {
         confirmReminders = defaults.object(forKey: "confirmReminders") as? Bool ?? false
         continuousConversation = defaults.object(forKey: "continuous") as? Bool ?? false
         handsFree = defaults.object(forKey: "handsFree") as? Bool ?? true
+        brainChoice = defaults.string(forKey: "brain") ?? "auto"
     }
 
     /// Writes preferences to UserDefaults and the API key to the Keychain.
@@ -43,6 +46,7 @@ final class JarvisSettings {
         defaults.set(confirmReminders, forKey: "confirmReminders")
         defaults.set(continuousConversation, forKey: "continuous")
         defaults.set(handsFree, forKey: "handsFree")
+        defaults.set(brainChoice, forKey: "brain")
     }
 
     var claudeConfiguration: ClaudeConfiguration {
