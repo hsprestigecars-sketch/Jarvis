@@ -8,8 +8,6 @@ import UserNotifications
 
 @MainActor
 enum DeviceTools {
-    static let timerPrefix = "jarvis.timer."
-
     static func register(in registry: ToolRegistry, emergencyStop: EmergencyStop) throws {
         UIDevice.current.isBatteryMonitoringEnabled = true
 
@@ -42,39 +40,68 @@ enum DeviceTools {
         try registry.register(
             ToolSpec(
                 name: "start_timer",
-                description: "Start a countdown timer. JARVIS notifies the user when it ends, even if the app is closed.",
+                description: "Start a countdown timer (up to 24 hours). JARVIS alerts the user when it ends, even if the app is closed. Several timers can run at once; give each a label.",
                 category: .device, risk: .safe,
                 inputSchema: Schema.object([
-                    "minutes": Schema.integer("Minutes (may be combined with seconds)"),
+                    "hours": Schema.integer("Hours (may be combined with minutes and seconds)"),
+                    "minutes": Schema.integer("Minutes"),
                     "seconds": Schema.integer("Seconds"),
-                    "label": Schema.string("What the timer is for"),
+                    "label": Schema.string("What the timer is for, e.g. 'pasta'"),
                 ])
             )
         ) { args in
-            let total = (args.optionalInt("minutes") ?? 0) * 60 + (args.optionalInt("seconds") ?? 0)
-            guard total > 0, total <= 24 * 3600 else { throw ToolError.invalidArguments("Timer must be between 1 second and 24 hours.") }
+            let total = TimerText.totalSeconds(hours: args.optionalInt("hours"), minutes: args.optionalInt("minutes"), seconds: args.optionalInt("seconds"))
+            guard total > 0, total <= TimerText.maxSeconds else { throw ToolError.invalidArguments("Timer must be between 1 second and 24 hours.") }
             let center = UNUserNotificationCenter.current()
             guard try await center.requestAuthorization(options: [.alert, .sound]) else {
                 throw ToolError.permissionDenied("Notifications are off for JARVIS, so the timer can't alert you. Allow them in Settings › Notifications › JARVIS.")
             }
+            let label = args.optionalString("label")
             let content = UNMutableNotificationContent()
             content.title = "JARVIS timer"
-            content.body = args.optionalString("label") ?? "Time's up."
+            content.body = label ?? "Time's up."
             content.sound = .default
             content.interruptionLevel = .timeSensitive
-            let id = timerPrefix + UUID().uuidString
-            try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(total), repeats: false)))
             let ends = Date().addingTimeInterval(TimeInterval(total))
-            return ToolOutput("Timer set for \(total / 60) min \(total % 60) s, ending at \(Format.iso(ends)).", summary: "Timer started")
+            // A pending trigger's nextTriggerDate() counts from "now", so keep the real end time.
+            var info: [String: Any] = [TimerText.endsKey: ends.timeIntervalSince1970]
+            if let label { info[TimerText.labelKey] = label }
+            content.userInfo = info
+            let id = TimerText.notificationPrefix + UUID().uuidString
+            try await center.add(UNNotificationRequest(identifier: id, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(total), repeats: false)))
+            let name = label.map { "'\($0)' timer" } ?? "Timer"
+            return ToolOutput("\(name) set for \(TimerText.duration(total)), ending at \(Format.iso(ends)).", summary: "Timer \(TimerText.duration(total))")
+        }
+
+        try registry.register(
+            ToolSpec(
+                name: "list_timers",
+                description: "List the JARVIS timers that are still running, with their labels and time left.",
+                category: .device, risk: .safe, inputSchema: Schema.object([:])
+            )
+        ) { _ in
+            let timers = await runningTimers()
+            guard !timers.isEmpty else { return ToolOutput("No timers are running.", summary: "No timers") }
+            let lines = timers.map { timer in
+                "- \(timer.label ?? "Timer"): \(TimerText.duration(Int(timer.ends.timeIntervalSinceNow.rounded()))) left (ends \(Format.iso(timer.ends)))"
+            }
+            return ToolOutput(lines.joined(separator: "\n"), summary: "\(timers.count) timer(s) running")
         }
 
         try registry.register(
             ToolSpec(
                 name: "cancel_timers",
-                description: "Cancel all running JARVIS timers.",
-                category: .device, risk: .safe, inputSchema: Schema.object([:])
+                description: "Cancel running JARVIS timers. With 'label', cancels only timers whose label contains it; without it, cancels all of them.",
+                category: .device, risk: .safe,
+                inputSchema: Schema.object(["label": Schema.string("Part of the label of the timer to cancel, e.g. 'pasta'")])
             )
-        ) { _ in
+        ) { args in
+            if let query = args.optionalString("label") {
+                let matching = await runningTimers().filter { TimerText.label($0.label, matches: query) }
+                guard !matching.isEmpty else { return ToolOutput("No running timer matches '\(query)'.", summary: "No matching timer") }
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: matching.map(\.id))
+                return ToolOutput("Cancelled \(matching.count) timer(s) matching '\(query)'.", summary: "Timer cancelled")
+            }
             let count = await cancelAllTimers()
             return ToolOutput(count == 0 ? "No timers were running." : "Cancelled \(count) timer(s).", summary: "Timers cancelled")
         }
@@ -85,12 +112,47 @@ enum DeviceTools {
         }
     }
 
+    struct RunningTimer {
+        var id: String
+        var label: String?
+        var ends: Date
+    }
+
+    static func runningTimers() async -> [RunningTimer] {
+        await UNUserNotificationCenter.current().pendingNotificationRequests()
+            .filter { $0.identifier.hasPrefix(TimerText.notificationPrefix) }
+            .compactMap { request -> RunningTimer? in
+                let stored = (request.content.userInfo[TimerText.endsKey] as? Double).map(Date.init(timeIntervalSince1970:))
+                guard let ends = stored ?? (request.trigger as? UNTimeIntervalNotificationTrigger)?.nextTriggerDate() else { return nil }
+                return RunningTimer(id: request.identifier, label: request.content.userInfo[TimerText.labelKey] as? String, ends: ends)
+            }
+            .sorted { $0.ends < $1.ends }
+    }
+
     @discardableResult
     static func cancelAllTimers() async -> Int {
         let center = UNUserNotificationCenter.current()
-        let ids = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(timerPrefix) }
+        let ids = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(TimerText.notificationPrefix) }
         center.removePendingNotificationRequests(withIdentifiers: ids)
         return ids.count
+    }
+}
+
+/// Shows a JARVIS timer's alert while the app is open (iPadOS hides
+/// notifications from the app in front unless asked) and lets JARVIS say it.
+final class TimerAlerts: NSObject, UNUserNotificationCenterDelegate {
+    @MainActor var onTimerFinished: ((String?) -> Void)?
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        let request = notification.request
+        if request.identifier.hasPrefix(TimerText.notificationPrefix) {
+            let label = request.content.userInfo[TimerText.labelKey] as? String
+            Task { @MainActor in self.onTimerFinished?(label) }
+        }
+        completionHandler([.banner, .list, .sound])
     }
 }
 

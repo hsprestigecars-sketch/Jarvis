@@ -41,6 +41,7 @@ targets:
         INFOPLIST_KEY_NSContactsUsageDescription: "JARVIS looks up the person you name so it can prepare a message or call for you to confirm."
         INFOPLIST_KEY_NSCameraUsageDescription: "JARVIS uses the camera only when you choose to take a photo or video."
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "JARVIS can save media you export back to your library."
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "JARVIS uses your approximate location only when you ask for the weather where you are."
     info:
       path: App/Resources/Info.plist
       properties:

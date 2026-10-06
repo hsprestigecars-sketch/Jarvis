@@ -51,7 +51,8 @@ let package = Package(
                 .reminders(purposeString: "JARVIS reads and creates reminders when you ask it to."),
                 .contacts(purposeString: "JARVIS looks up the person you name so it can prepare a message or call for you to confirm."),
                 .camera(purposeString: "JARVIS uses the camera only when you choose to take a photo or video."),
-                .photoLibraryAdd(purposeString: "JARVIS can save media you export back to your library.")
+                .photoLibraryAdd(purposeString: "JARVIS can save media you export back to your library."),
+                .locationWhenInUse(purposeString: "JARVIS uses your approximate location only when you ask for the weather where you are.")
             ],
             appCategory: .productivity
         )

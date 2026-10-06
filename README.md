@@ -58,7 +58,9 @@ On first launch, JARVIS opens Settings so you can paste your Claude API key. The
 | Daily assistant | "Plan my day", "Briefing" and "Night mode" use the calendar, reminders and web search, and never change the calendar unless you ask. |
 | Messages, email, calls | Need your confirmation, then open Apple's composer or the call prompt. You send the message yourself. |
 | Social | Builds Instagram and TikTok post packages: caption and hashtag checks against platform limits, plus copies of the media. These are handed to the official app through the Share Sheet. Publishing through the official APIs is built in but stays disabled until an OAuth app is registered (see below). |
-| Device | Battery and storage, timers (through notifications), opening apps, opening links, and running your own Shortcuts (needs your confirmation). |
+| Weather | Current conditions and up to a 7-day forecast from [Open-Meteo](https://open-meteo.com) (free, no key). Name a place, or ask about "here" and JARVIS uses your approximate location (rounded to about 1 km, asked only while the app is open). Works in free on-device mode too. |
+| Timers | Several labelled timers at once ("set a 10 minute pasta timer"), "how long is left?", and cancelling one by name or all of them. They alert you through notifications even when JARVIS is closed. When JARVIS is open, it also says out loud which timer finished. The emergency stop cancels them all. |
+| Device | Battery and storage, opening apps, opening links, and running your own Shortcuts (needs your confirmation). |
 | Safety | Level 1 runs, Level 2 asks you first, Level 3 is blocked in code. There is an emergency stop button (⌘.) and a voice "JARVIS, stop". "Cancel" works by voice or button. |
 
 ## Not done yet (on purpose)

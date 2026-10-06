@@ -2,6 +2,7 @@ import Foundation
 import JarvisCore
 import Observation
 import UIKit
+import UserNotifications
 
 /// Wires the JARVIS pipeline together: UI + voice → agent → safety →
 /// confirmation → tools.
@@ -18,6 +19,8 @@ final class AppModel {
     @ObservationIgnored private var replyBySpeech = false
     private(set) var registrationProblems: [String] = []
     @ObservationIgnored private var localBrain: LocalReasoningBackend?
+    /// Kept alive here: the notification center holds its delegate weakly.
+    private let timerAlerts = TimerAlerts()
 
     init() {
         JarvisFiles.bootstrap()
@@ -41,6 +44,7 @@ final class AppModel {
             ("Notes", { try NoteTools.register(in: registry, presenter: presenter) }),
             ("Files", { try FileTools.register(in: registry, presenter: presenter) }),
             ("Device", { try DeviceTools.register(in: registry, emergencyStop: emergencyStop) }),
+            ("Weather", { try WeatherTools.register(in: registry) }),
             ("Communication", { try CommunicationTools.register(in: registry, presenter: presenter) }),
             ("Apps", { try AppLinkTools.register(in: registry, presenter: presenter) }),
             ("Social & media", { try SocialAndMediaTools.register(in: registry, presenter: presenter) }),
@@ -54,6 +58,13 @@ final class AppModel {
         self.localBrain = localBrain
         agent.localBackend = localBrain
         agent.brainSelector = { [weak self] in self?.activeBrain ?? .claude }
+
+        UNUserNotificationCenter.current().delegate = timerAlerts
+        timerAlerts.onTimerFinished = { [weak self] label in
+            guard let self, self.settings.speakReplies else { return }
+            self.voiceOutput.voiceIdentifier = self.settings.voiceIdentifier
+            self.voiceOutput.speak(TimerText.finishedAnnouncement(label: label))
+        }
 
         agent.emergencyStop.register("Stop microphone") { [weak self] in
             self?.voiceInput.stop(submit: false)

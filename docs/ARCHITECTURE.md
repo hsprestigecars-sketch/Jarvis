@@ -40,7 +40,7 @@ The agent then repairs the conversation history. Every `tool_use` gets a matchin
 
 | Level | Behaviour | Examples |
 |---|---|---|
-| 1 SAFE | Runs immediately | read calendar/reminders, create reminder, notes, read/create files, timers, research, prepare social post |
+| 1 SAFE | Runs immediately | read calendar/reminders, create reminder, notes, read/create files, timers, weather, research, prepare social post |
 | 2 CONFIRM | Shows a confirmation card, then runs the frozen action | create/edit/delete events, delete reminders/notes/files, move/overwrite files, send message/email, call, run Shortcut, publish post |
 | 3 BLOCKED | Can't be registered; arguments and requests are scanned | banking, cards, payments, trading, crypto, passwords, OTP/2FA/recovery codes, business financial systems |
 

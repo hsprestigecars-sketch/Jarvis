@@ -16,4 +16,5 @@
 | "Hey JARVIS" (screen off) | No always-on microphone for third-party apps | Siri: "Ask JARVIS…" or "Talk to JARVIS" through App Shortcuts |
 | Controlling other apps | Not allowed | Opens apps through their public URL schemes, or runs your own Shortcuts |
 | Battery or device info | `UIDevice` and `ProcessInfo` | Reports battery level and state, Low Power Mode, storage and OS version |
-| Weather and news | WeatherKit needs a paid entitlement | Uses web search with citations |
+| Weather | WeatherKit needs a paid developer entitlement | Uses Open-Meteo (free, no key). Location is "When In Use" only, rounded to about 1 km before it is sent |
+| News | No general news API | Uses web search with citations |
